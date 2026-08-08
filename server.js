@@ -16,7 +16,24 @@ const initSqlJs = require("sql.js");
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const NODE_ENV = process.env.NODE_ENV || "development";
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
+function resolveDataDir() {
+  const desired = process.env.DATA_DIR || path.join(__dirname, "data");
+  const fallback = path.join(__dirname, "data");
+  try {
+    fs.mkdirSync(desired, { recursive: true });
+    fs.accessSync(desired, fs.constants.W_OK);
+    return desired;
+  } catch (e) {
+    console.warn(
+      `Could not use DATA_DIR="${desired}" (${e.code || e.message}). ` +
+        `Falling back to ${fallback}. NOTE: without a persistent disk mounted there, ` +
+        `data will be lost on redeploy — see README.md.`
+    );
+    fs.mkdirSync(fallback, { recursive: true });
+    return fallback;
+  }
+}
+const DATA_DIR = resolveDataDir();
 const DB_PATH = path.join(DATA_DIR, "orbit.db");
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "admin@orbit.local").toLowerCase();
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "OrbitAdmin2026!";
@@ -39,7 +56,7 @@ if (!JWT_SECRET) {
 }
 const EFFECTIVE_JWT_SECRET = JWT_SECRET || "dev-only-insecure-secret-change-me";
 
-if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+// DATA_DIR is created inside resolveDataDir() above.
 
 // ---------- Database ----------
 let database = null;
@@ -382,14 +399,28 @@ app.get("/api/admin/feedback", requireAuth, requireAdmin, (req, res) => {
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-// ---------- Serve frontend from public folder ----------
+// ---------- Serve frontend ----------
+// Looks for index.html in ./public first, then in the repo root, so it works
+// whether you uploaded it into a "public" folder or straight to the repo root.
 const PUBLIC_DIR = path.join(__dirname, "public");
-if (fs.existsSync(PUBLIC_DIR)) {
-  app.use(express.static(PUBLIC_DIR));
-  app.get("*", (req, res, next) => {
-    if (req.path.startsWith("/api/")) return next();
-    res.sendFile(path.join(PUBLIC_DIR, "index.html"));
+const ROOT_INDEX = path.join(__dirname, "index.html");
+const FRONTEND_DIR = fs.existsSync(path.join(PUBLIC_DIR, "index.html"))
+  ? PUBLIC_DIR
+  : fs.existsSync(ROOT_INDEX)
+  ? __dirname
+  : null;
+
+if (FRONTEND_DIR) {
+  console.log(`Serving frontend from: ${FRONTEND_DIR}`);
+  app.use(express.static(FRONTEND_DIR, { index: false })); // index:false so "/" always goes through the handler below
+  app.get(/^(?!\/api\/).*/, (req, res) => {
+    res.sendFile(path.join(FRONTEND_DIR, "index.html"));
   });
+} else {
+  console.warn(
+    "No index.html found in ./public or the repo root — this deployment will only serve the API. " +
+      "Add index.html to your repo (either at the root or inside a 'public' folder) to serve the frontend too."
+  );
 }
 
 app.use((req, res) => res.status(404).json({ error: "Not found" }));

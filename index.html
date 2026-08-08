@@ -386,9 +386,10 @@
   .agenda-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;background:var(--surface-strong);font-size:12px;margin-bottom:6px;}
   .agenda-item:last-child{margin-bottom:0;}
 </style>
+<script>window.ORBIT_API_BASE = "https://orbit-t0ap.onrender.com";</script>
 </head>
 <body>
-<div id="orbitLoader"><div class="ol-scene"><div class="ol-ring ol-r1"><span class="ol-planet ol-p1"></span></div><div class="ol-ring ol-r2"><span class="ol-planet ol-p2"></span></div><div class="ol-ring ol-r3"><span class="ol-planet ol-p3"></span></div><div class="ol-sun"></div></div><div class="ol-label">Orbit</div></div>
+<div id="orbitLoader" style="display:none;"><div class="ol-scene"><div class="ol-ring ol-r1"><span class="ol-planet ol-p1"></span></div><div class="ol-ring ol-r2"><span class="ol-planet ol-p2"></span></div><div class="ol-ring ol-r3"><span class="ol-planet ol-p3"></span></div><div class="ol-sun"></div></div><div class="ol-label">Orbit</div></div>
 <div id="bgLayer"></div>
 <div class="mesh"><div class="m1"></div><div class="m2"></div><div class="m3"></div></div>
 <div id="root"></div>
@@ -401,8 +402,7 @@
 //
 // If the frontend is hosted separately from the backend (e.g. GitHub Pages
 // for the static site + Render for the API), set window.ORBIT_API_BASE in a
-// small <script> tag BEFORE this file loads:
-//   <script>window.ORBIT_API_BASE = "https://your-backend.onrender.com";</script>
+// small inline script tag BEFORE this file loads, pointing at your backend URL.
 // Leave it unset if the backend serves this HTML file itself (same origin).
 const API_BASE=(window.ORBIT_API_BASE||"").replace(/\/$/,"");
 const TOKEN_KEY="orbit-token",CURRENT_USER_KEY="orbit-current-user",ACCOUNT_RECOVERY_DAYS=30;
@@ -630,18 +630,14 @@ function showToast(msg,type="info"){
   clearTimeout(showToast._t);showToast._t=setTimeout(()=>t.classList.remove("show"),2500);
 }
 
-/* ===================== Orbit loader & ambient icon flourishes ===================== */
-function showOrbitLoader(){
-  const ol=document.getElementById("orbitLoader");
-  if(ol){ol.style.display="flex";ol.classList.remove("hide");}
-}
+/* ===================== Orbit loader (disabled) ===================== */
+// The splash animation is turned off — these are now no-ops so nothing ever
+// hides the app behind a spinner. If something goes wrong on load, you'll
+// see the actual page/error instead of an endless animation.
+function showOrbitLoader(){}
 function hideOrbitLoader(delay=0){
   const ol=document.getElementById("orbitLoader");
-  if(!ol)return;
-  setTimeout(()=>{
-    ol.classList.add("hide");
-    setTimeout(()=>{if(ol.classList.contains("hide"))ol.style.display="none";},600);
-  },delay);
+  if(ol)ol.style.display="none";
 }
 // Plays a brief "a couple of tiny planets sweep once around this icon and fade" flourish.
 // Self-cleaning: injects its own markup and removes it when the animation finishes, so it
@@ -1961,15 +1957,14 @@ function bindTabEvents(){
 /* ===================== Init ===================== */
 async function init(){
   applyZoom();
-  showOrbitLoader();
-  const bootStartedAt=Date.now();
-  const MIN_BOOT_LOADER_MS=900; // let the orbit splash play at least this long so it never just flashes
   bindGlobalEvents();
-  if(getToken()){state=await loadUserData();if(!state)state=null;}
+  if(getToken()){
+    try{state=await loadUserData();}
+    catch(e){console.error("Failed to load session:",e);state=null;}
+  }
   if(state){history=[];historyIndex=-1;saveHistory();render();startEventReminderChecks();}
   else{state=null;renderLoginPage();}
   startFocusInterval();
-  hideOrbitLoader(Math.max(0,MIN_BOOT_LOADER_MS-(Date.now()-bootStartedAt)));
 }
 init();
 </script>
